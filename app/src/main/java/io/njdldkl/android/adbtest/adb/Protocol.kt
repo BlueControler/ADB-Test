@@ -1,8 +1,8 @@
-package io.njdldkl.android.adbtest.agent
+package io.njdldkl.android.adbtest.adb
 
 import org.json.JSONObject
 
-data class DeviceSnapshot(
+data class AdbSnapshot(
     val screenshot: String?,
     val ui: String?,
     val currentPackage: String?,

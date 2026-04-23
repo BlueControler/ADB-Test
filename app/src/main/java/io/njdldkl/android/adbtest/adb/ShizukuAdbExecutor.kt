@@ -1,4 +1,4 @@
-package io.njdldkl.android.adbtest.agent
+package io.njdldkl.android.adbtest.adb
 
 import android.content.ComponentName
 import android.content.ServiceConnection
@@ -70,7 +70,7 @@ class ShizukuAdbExecutor(
             ComponentName(packageName, RemoteShellUserService::class.java.name)
         )
             .daemon(false)
-            .processNameSuffix("adb_agent")
+            .processNameSuffix("adb")
             .tag("remote_shell")
             .version(1)
     }

@@ -1,8 +1,8 @@
 <resources>
-    <string name="app_name">ADB Agent</string>
-    <string name="accessibility_service_label">ADB Agent Accessibility</string>
-    <string name="accessibility_service_desc">采集当前界面的 UI 树，并同步前台应用信息给 Agent。</string>
-    <string name="notification_channel_name">ADB Agent Connection</string>
+    <string name="app_name">ADB</string>
+    <string name="accessibility_service_label">ADB Accessibility</string>
+    <string name="accessibility_service_desc">采集当前界面的 UI 树，并同步前台应用信息给 ADB。</string>
+    <string name="notification_channel_name">ADB Connection</string>
     <string name="notification_content">保持与服务端的连接并执行设备动作。</string>
     <string name="overlay_waiting">等待服务端指令</string>
 </resources>

@@ -1,4 +1,4 @@
-package io.njdldkl.android.adbtest.agent
+package io.njdldkl.android.adbtest.adb
 
 import android.content.Context
 import android.graphics.PixelFormat
@@ -8,11 +8,12 @@ import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import io.njdldkl.android.adbtest.R
 
-class OverlayController(
+class AdbOverlayController(
     context: Context
 ) {
     private val appContext = context.applicationContext
@@ -27,7 +28,7 @@ class OverlayController(
     }
 
     private val titleView = TextView(appContext).apply {
-        text = "ADB Agent"
+        text = "ADB"
         setTextColor(0xFFFFFFFF.toInt())
         textSize = 16f
     }
@@ -41,6 +42,11 @@ class OverlayController(
     private val detailView = TextView(appContext).apply {
         setTextColor(0xFFE5E7EB.toInt())
         textSize = 12f
+    }
+
+    private val interactionButton = Button(appContext).apply {
+        text = "完成交互"
+        visibility = View.GONE
     }
 
     private val params = WindowManager.LayoutParams(
@@ -67,6 +73,7 @@ class OverlayController(
         container.addView(titleView)
         container.addView(statusView)
         container.addView(detailView)
+        container.addView(interactionButton)
     }
 
     fun show() {
@@ -82,6 +89,22 @@ class OverlayController(
             statusView.text = status
             detailView.text = detail.orEmpty()
             detailView.visibility = if (detail.isNullOrBlank()) View.GONE else View.VISIBLE
+            interactionButton.visibility = View.GONE
+            interactionButton.setOnClickListener(null)
+        }
+    }
+
+    fun waitForInteraction(message: String?, onDone: () -> Unit) {
+        runOnMain {
+            statusView.text = "等待用户交互"
+            detailView.text = message.orEmpty()
+            detailView.visibility = if (message.isNullOrBlank()) View.GONE else View.VISIBLE
+            interactionButton.visibility = View.VISIBLE
+            interactionButton.setOnClickListener {
+                interactionButton.visibility = View.GONE
+                interactionButton.setOnClickListener(null)
+                onDone()
+            }
         }
     }
 

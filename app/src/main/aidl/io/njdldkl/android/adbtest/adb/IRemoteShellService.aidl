@@ -1,4 +1,4 @@
-package io.njdldkl.android.adbtest.agent;
+package io.njdldkl.android.adbtest.adb;
 
 import android.os.Bundle;
 

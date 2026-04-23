@@ -1,11 +1,11 @@
-package io.njdldkl.android.adbtest.agent
+package io.njdldkl.android.adbtest.adb
 
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
-class AgentAccessibilityService : AccessibilityService() {
+class AdbAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         instance = this
@@ -69,7 +69,7 @@ class AgentAccessibilityService : AccessibilityService() {
 
     companion object {
         @Volatile
-        private var instance: AgentAccessibilityService? = null
+        private var instance: AdbAccessibilityService? = null
 
         @Volatile
         var latestPackageName: String? = null

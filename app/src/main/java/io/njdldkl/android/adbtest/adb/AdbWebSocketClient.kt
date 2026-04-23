@@ -1,4 +1,4 @@
-package io.njdldkl.android.adbtest.agent
+package io.njdldkl.android.adbtest.adb
 
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
@@ -13,13 +13,12 @@ import okhttp3.WebSocketListener
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.milliseconds
 
-class DeviceWebSocketClient(
+class AdbWebSocketClient(
     private val scope: CoroutineScope,
-    private val config: io.njdldkl.android.adbtest.AgentConfig,
-    private val collectSnapshot: suspend () -> DeviceSnapshot,
+    private val config: io.njdldkl.android.adbtest.AdbConfig,
+    private val collectSnapshot: suspend () -> AdbSnapshot,
     private val onServerRequest: suspend (JSONObject) -> Unit,
     private val onStatus: (String, String?) -> Unit
 ) {
@@ -27,7 +26,6 @@ class DeviceWebSocketClient(
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .build()
 
-    private val nextClientRequestId = AtomicInteger(((System.currentTimeMillis() % 10_000) + 1).toInt())
     private var webSocket: WebSocket? = null
     private var pingJob: Job? = null
     private val incomingBuffer = StringBuilder()
@@ -76,9 +74,8 @@ class DeviceWebSocketClient(
         val snapshot = collectSnapshot()
         sendRequest(
             message = "connect",
-            requestId = nextClientRequestId.getAndIncrement(),
+            requestId = CONNECT_REQUEST_ID,
             data = snapshot.toJson().apply {
-                put("token", config.token)
                 put("width", snapshotWidth)
                 put("height", snapshotHeight)
             }
@@ -137,6 +134,10 @@ class DeviceWebSocketClient(
         val envelope = JSONObject(raw)
         val type = envelope.optString("type")
         val message = envelope.optString("message")
+        if (type == "request" && message == "ping") {
+            sendResponse("pong", null, null)
+            return
+        }
         if (type == "response" && message == "pong") {
             onStatus("心跳正常", null)
             return
@@ -165,8 +166,13 @@ class DeviceWebSocketClient(
         }
         val httpUrl = normalizedBase.toHttpUrl()
         return httpUrl.newBuilder()
-            .addPathSegments("ws/devices/${config.deviceId}")
+            .encodedPath(PROTOCOL_PATH)
             .build()
             .toString()
+    }
+
+    private companion object {
+        private const val CONNECT_REQUEST_ID = 1
+        private const val PROTOCOL_PATH = "/adb"
     }
 }

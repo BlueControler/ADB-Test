@@ -1,4 +1,4 @@
-package io.njdldkl.android.adbtest.agent
+package io.njdldkl.android.adbtest.adb
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -10,8 +10,9 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import io.njdldkl.android.adbtest.AgentConfig
+import io.njdldkl.android.adbtest.AdbConfig
 import io.njdldkl.android.adbtest.R
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,19 +22,19 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import kotlin.time.Duration.Companion.milliseconds
 
-class AgentService : Service() {
+class AdbService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private lateinit var overlayController: OverlayController
+    private lateinit var overlayController: AdbOverlayController
     private lateinit var executor: ShizukuAdbExecutor
-    private lateinit var collector: DeviceSnapshotCollector
-    private var client: DeviceWebSocketClient? = null
+    private lateinit var collector: AdbSnapshotCollector
+    private var client: AdbWebSocketClient? = null
 
     override fun onCreate() {
         super.onCreate()
-        overlayController = OverlayController(this)
+        overlayController = AdbOverlayController(this)
         executor = ShizukuAdbExecutor(packageName)
-        collector = DeviceSnapshotCollector(executor)
+        collector = AdbSnapshotCollector(executor)
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification(getString(R.string.notification_content)))
         overlayController.show()
@@ -46,20 +47,18 @@ class AgentService : Service() {
             return START_NOT_STICKY
         }
 
-        val config = AgentConfig(
-            serverBaseUrl = intent?.getStringExtra(EXTRA_SERVER_URL).orEmpty(),
-            deviceId = intent?.getStringExtra(EXTRA_DEVICE_ID).orEmpty(),
-            token = intent?.getStringExtra(EXTRA_TOKEN).orEmpty()
+        val config = AdbConfig(
+            serverBaseUrl = intent?.getStringExtra(EXTRA_SERVER_URL).orEmpty()
         )
 
-        if (config.serverBaseUrl.isBlank() || config.deviceId.isBlank() || config.token.isBlank()) {
+        if (config.serverBaseUrl.isBlank()) {
             overlayController.update("启动失败", "连接参数缺失")
             stopSelf()
             return START_NOT_STICKY
         }
 
         client?.disconnect()
-        client = DeviceWebSocketClient(
+        client = AdbWebSocketClient(
             scope = serviceScope,
             config = config,
             collectSnapshot = { collector.collect() },
@@ -132,22 +131,18 @@ class AgentService : Service() {
                     delay(120.milliseconds)
                     runShell("input tap $x $y")
                 }
-                "back" -> runShell("input keyevent KEYCODE_BACK")
-                "home" -> runShell("input keyevent KEYCODE_HOME")
-                "wait" -> {
-                    val seconds = data?.optDouble("duration", 0.0) ?: 0.0
-                    require(seconds >= 0.0) { "duration 不能为负数。" }
-                    delay((seconds * 1000).toLong().milliseconds)
+                "keyevent" -> {
+                    runShell("input keyevent ${data.requiredInt("keyevent")}")
                 }
-                "interact", "takeOver", "finish" -> {
-                    overlayController.update(message, data?.optString("message"))
+                "interact" -> {
+                    waitForInteraction(data?.optString("message"))
                 }
                 else -> error("未知消息类型: $message")
             }
         }.fold(
             onSuccess = {
                 val snapshot = collector.collect()
-                client?.sendResponse("actionResult", requestId, snapshot.toJson())
+                client?.sendResponse("actionResult", requestId, snapshotJson(snapshot))
                 overlayController.update("已完成", message)
             },
             onFailure = { error ->
@@ -155,13 +150,23 @@ class AgentService : Service() {
                 client?.sendResponse(
                     "error",
                     requestId,
-                    snapshot.toJson().apply {
+                    snapshotJson(snapshot).apply {
                         put("message", error.message ?: "执行失败")
                     }
                 )
                 overlayController.update("执行失败", error.message)
             }
         )
+    }
+
+    private fun snapshotJson(snapshot: AdbSnapshot): JSONObject = snapshot.toJson()
+
+    private suspend fun waitForInteraction(message: String?) {
+        val completed = CompletableDeferred<Unit>()
+        overlayController.waitForInteraction(message) {
+            completed.complete(Unit)
+        }
+        completed.await()
     }
 
     private suspend fun runShell(command: String) {
@@ -189,25 +194,21 @@ class AgentService : Service() {
     }
 
     companion object {
-        private const val ACTION_START = "io.njdldkl.android.adbtest.agent.START"
-        private const val ACTION_STOP = "io.njdldkl.android.adbtest.agent.STOP"
+        private const val ACTION_START = "io.njdldkl.android.adbtest.adb.START"
+        private const val ACTION_STOP = "io.njdldkl.android.adbtest.adb.STOP"
         private const val EXTRA_SERVER_URL = "server_url"
-        private const val EXTRA_DEVICE_ID = "device_id"
-        private const val EXTRA_TOKEN = "token"
         private const val NOTIFICATION_ID = 1001
-        private const val NOTIFICATION_CHANNEL_ID = "agent_connection"
+        private const val NOTIFICATION_CHANNEL_ID = "adb_connection"
 
-        fun createStartIntent(context: Context, config: AgentConfig): Intent {
-            return Intent(context, AgentService::class.java).apply {
+        fun createStartIntent(context: Context, config: AdbConfig): Intent {
+            return Intent(context, AdbService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_SERVER_URL, config.serverBaseUrl)
-                putExtra(EXTRA_DEVICE_ID, config.deviceId)
-                putExtra(EXTRA_TOKEN, config.token)
             }
         }
 
         fun createStopIntent(context: Context): Intent {
-            return Intent(context, AgentService::class.java).apply {
+            return Intent(context, AdbService::class.java).apply {
                 action = ACTION_STOP
             }
         }

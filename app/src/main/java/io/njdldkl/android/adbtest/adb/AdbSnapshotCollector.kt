@@ -1,22 +1,22 @@
-package io.njdldkl.android.adbtest.agent
+package io.njdldkl.android.adbtest.adb
 
-class DeviceSnapshotCollector(
+class AdbSnapshotCollector(
     private val executor: ShizukuAdbExecutor
 ) {
 
-    suspend fun collect(): DeviceSnapshot {
+    suspend fun collect(): AdbSnapshot {
         val screenshot = runCatching {
             executor.execute("screencap -p | base64").stdout.replace("\n", "").ifBlank { null }
         }.getOrNull()
 
-        val ui = AgentAccessibilityService.dumpUiTree()
+        val ui = AdbAccessibilityService.dumpUiTree()
         val topActivity = resolveTopActivity()
 
-        return DeviceSnapshot(
+        return AdbSnapshot(
             screenshot = screenshot,
             ui = ui,
-            currentPackage = AgentAccessibilityService.currentPackageName() ?: topActivity.first,
-            activity = AgentAccessibilityService.currentActivityName() ?: topActivity.second
+            currentPackage = AdbAccessibilityService.currentPackageName() ?: topActivity.first,
+            activity = AdbAccessibilityService.currentActivityName() ?: topActivity.second
         )
     }
 
@@ -25,9 +25,9 @@ class DeviceSnapshotCollector(
             executor.execute("dumpsys window | grep mCurrentFocus").stdout
         }.getOrNull().orEmpty()
         if (output.isBlank()) return null to null
-        val token = output.substringAfterLast(" ").substringBefore("}")
-        val activity = token.substringAfter("/", "")
-        val pkg = token.substringBefore("/", "")
+        val focusComponent = output.substringAfterLast(" ").substringBefore("}")
+        val activity = focusComponent.substringAfter("/", "")
+        val pkg = focusComponent.substringBefore("/", "")
         return pkg.ifBlank { null } to activity.ifBlank { null }
     }
 }
