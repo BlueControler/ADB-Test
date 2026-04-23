@@ -1,15 +1,10 @@
 package io.njdldkl.android.adbtest.adb
 
-import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import okhttp3.WebSocket
-import okhttp3.WebSocketListener
+import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
@@ -29,6 +24,7 @@ class AdbWebSocketClient(
     private var webSocket: WebSocket? = null
     private var pingJob: Job? = null
     private val incomingBuffer = StringBuilder()
+
     @Volatile
     private var closedByClient = false
 

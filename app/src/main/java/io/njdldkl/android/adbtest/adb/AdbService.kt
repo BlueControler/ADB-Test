@@ -8,17 +8,12 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.util.Base64
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import io.njdldkl.android.adbtest.AdbConfig
 import io.njdldkl.android.adbtest.R
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import org.json.JSONObject
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -95,7 +90,7 @@ class AdbService : Service() {
         val data = envelope.optJSONObject("data")
         overlayController.update("执行中", message)
         // 打印日志
-        Log.i("测试","执行请求！")
+        Log.i("测试", "执行请求！")
 
         runCatching {
             when (message) {
@@ -105,25 +100,30 @@ class AdbService : Service() {
                     require(pkg.isNotBlank()) { "package 不能为空。" }
                     runShell("monkey -p $pkg -c android.intent.category.LAUNCHER 1")
                 }
+
                 "tap" -> {
                     runShell("input tap ${data.requiredInt("x")} ${data.requiredInt("y")}")
                 }
+
                 "type" -> {
                     val text = data?.optString("text").orEmpty()
                     require(text.isNotBlank()) { "text 不能为空。" }
-                    runShell("input text ${shellQuote(text)}")
+                    typeWithAdbKeyboard(text)
                 }
+
                 "swipe" -> {
                     runShell(
                         "input swipe ${data.requiredInt("startX")} ${data.requiredInt("startY")} " +
-                            "${data.requiredInt("endX")} ${data.requiredInt("endY")} 250"
+                                "${data.requiredInt("endX")} ${data.requiredInt("endY")} 250"
                     )
                 }
+
                 "longPress" -> {
                     val x = data.requiredInt("x")
                     val y = data.requiredInt("y")
                     runShell("input swipe $x $y $x $y 800")
                 }
+
                 "doubleTap" -> {
                     val x = data.requiredInt("x")
                     val y = data.requiredInt("y")
@@ -131,12 +131,15 @@ class AdbService : Service() {
                     delay(120.milliseconds)
                     runShell("input tap $x $y")
                 }
+
                 "keyevent" -> {
                     runShell("input keyevent ${data.requiredInt("keyevent")}")
                 }
+
                 "interact" -> {
                     waitForInteraction(data?.optString("message"))
                 }
+
                 else -> error("未知消息类型: $message")
             }
         }.fold(
@@ -174,6 +177,39 @@ class AdbService : Service() {
         check(result.isSuccess) { result.stderr.ifBlank { "命令执行失败: $command" } }
     }
 
+    private suspend fun typeWithAdbKeyboard(text: String) {
+        val currentIme = currentInputMethod()
+        val restoreIme = if (currentIme.isNullOrBlank() || currentIme == ADB_KEYBOARD_IME) {
+            firstNonAdbInputMethod()
+        } else {
+            currentIme
+        }
+        require(!restoreIme.isNullOrBlank()) { "未找到可恢复的非 ADB 输入法。" }
+
+        try {
+            runShell("ime set $ADB_KEYBOARD_IME")
+            val encodedText = Base64.encodeToString(text.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+            runShell("am broadcast -a ADB_INPUT_B64 --es msg '$encodedText'")
+        } finally {
+            runCatching { runShell("ime set $restoreIme") }
+                .onFailure { Log.w("测试", "恢复输入法失败: ${it.message}") }
+        }
+    }
+
+    private suspend fun currentInputMethod(): String? {
+        val result = executor.execute("settings get secure default_input_method")
+        check(result.isSuccess) { result.stderr.ifBlank { "读取当前输入法失败" } }
+        return result.stdout.trim().takeUnless { it.isBlank() || it == "null" }
+    }
+
+    private suspend fun firstNonAdbInputMethod(): String? {
+        val result = executor.execute("ime list -s")
+        check(result.isSuccess) { result.stderr.ifBlank { "读取输入法列表失败" } }
+        return result.stdout.lineSequence()
+            .map { it.trim() }
+            .firstOrNull { it.isNotBlank() && it != ADB_KEYBOARD_IME }
+    }
+
     private fun buildNotification(content: String): Notification {
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
@@ -199,6 +235,7 @@ class AdbService : Service() {
         private const val EXTRA_SERVER_URL = "server_url"
         private const val NOTIFICATION_ID = 1001
         private const val NOTIFICATION_CHANNEL_ID = "adb_connection"
+        private const val ADB_KEYBOARD_IME = "com.android.adbkeyboard/.AdbIME"
 
         fun createStartIntent(context: Context, config: AdbConfig): Intent {
             return Intent(context, AdbService::class.java).apply {
@@ -218,8 +255,4 @@ class AdbService : Service() {
 private fun JSONObject?.requiredInt(key: String): Int {
     require(this != null && has(key)) { "$key 缺失。" }
     return getInt(key)
-}
-
-private fun shellQuote(text: String): String {
-    return "'" + text.replace("'", "'\\''").replace(" ", "%s") + "'"
 }

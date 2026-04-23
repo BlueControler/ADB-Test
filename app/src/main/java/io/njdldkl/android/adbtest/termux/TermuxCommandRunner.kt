@@ -14,7 +14,7 @@ object TermuxCommandRunner {
         require(command.isNotBlank()) { "命令不能为空。" }
         check(
             context.checkSelfPermission(TermuxConstants.PERMISSION_RUN_COMMAND) ==
-                PackageManager.PERMISSION_GRANTED
+                    PackageManager.PERMISSION_GRANTED
         ) {
             "未授予 Termux RUN_COMMAND 权限。"
         }
@@ -25,11 +25,11 @@ object TermuxCommandRunner {
             putExtra(TermuxCommandResultService.EXTRA_COMMAND, command)
         }
         val pendingIntentFlags = PendingIntent.FLAG_ONE_SHOT or
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                PendingIntent.FLAG_MUTABLE
-            } else {
-                0
-            }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    PendingIntent.FLAG_MUTABLE
+                } else {
+                    0
+                }
         val pendingIntent = PendingIntent.getService(
             context,
             executionId,

@@ -16,8 +16,10 @@ class ShizukuAdbExecutor(
 ) {
 
     private val mutex = Mutex()
+
     @Volatile
     private var remoteService: IRemoteShellService? = null
+
     @Volatile
     private var serviceConnection: ServiceConnection? = null
 

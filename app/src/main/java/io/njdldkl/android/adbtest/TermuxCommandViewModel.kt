@@ -10,11 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
-import io.njdldkl.android.adbtest.termux.TermuxCommandEntry
-import io.njdldkl.android.adbtest.termux.TermuxCommandResult
-import io.njdldkl.android.adbtest.termux.TermuxCommandResultBus
-import io.njdldkl.android.adbtest.termux.TermuxCommandRunner
-import io.njdldkl.android.adbtest.termux.TermuxConstants
+import io.njdldkl.android.adbtest.termux.*
 
 class TermuxCommandViewModel : ViewModel() {
     var command by mutableStateOf("pwd && ls -la")
