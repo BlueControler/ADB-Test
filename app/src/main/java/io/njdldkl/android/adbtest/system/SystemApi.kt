@@ -7,16 +7,18 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.location.Location
+import android.location.LocationListener
 import android.location.LocationManager
-import android.os.CancellationSignal
 import android.provider.CalendarContract
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.*
 import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlin.time.Duration.Companion.milliseconds
 
 class SystemApi(
@@ -225,29 +227,49 @@ class SystemApi(
             Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
         val providers = buildList {
-            if (fineGranted) add(LocationManager.GPS_PROVIDER)
             add(LocationManager.NETWORK_PROVIDER)
+            if (fineGranted) add(LocationManager.GPS_PROVIDER)
         }
-        val provider = providers.firstOrNull { locationManager.isProviderEnabled(it) }
-            ?: error("没有可用的定位提供方。")
+            .filter { locationManager.isProviderEnabled(it) }
+        require(providers.isNotEmpty()) { "没有可用的定位提供方。" }
 
-        return withTimeout(15_000.milliseconds) {
-            suspendCancellableCoroutine { continuation ->
-                val cancellationSignal = CancellationSignal()
-                continuation.invokeOnCancellation { cancellationSignal.cancel() }
-                locationManager.getCurrentLocation(
-                    provider,
-                    cancellationSignal,
-                    ContextCompat.getMainExecutor(appContext)
-                ) { location ->
-                    if (!continuation.isActive) return@getCurrentLocation
-                    if (location == null) {
-                        continuation.cancel(IllegalStateException("无法获取当前位置。"))
-                    } else {
+        return try {
+            withTimeout(30_000.milliseconds) {
+                suspendCancellableCoroutine { continuation ->
+                    lateinit var listener: LocationListener
+
+                    fun cleanup() {
+                        runCatching { locationManager.removeUpdates(listener) }
+                    }
+
+                    listener = LocationListener { location ->
+                        if (!continuation.isActive) return@LocationListener
+                        cleanup()
                         continuation.resume(location)
+                    }
+
+                    continuation.invokeOnCancellation { cleanup() }
+
+                    var registered = 0
+                    providers.forEach { provider ->
+                        runCatching {
+                            locationManager.requestLocationUpdates(
+                                provider,
+                                0L,
+                                0f,
+                                ContextCompat.getMainExecutor(appContext),
+                                listener
+                            )
+                            registered += 1
+                        }
+                    }
+                    if (registered == 0 && continuation.isActive) {
+                        continuation.resumeWithException(IllegalStateException("无法注册定位监听。"))
                     }
                 }
             }
+        } catch (_: TimeoutCancellationException) {
+            error("30秒内未获取到当前位置，请确认定位服务可用并重试。")
         }
     }
 

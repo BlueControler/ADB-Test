@@ -14,7 +14,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import rikka.shizuku.Shizuku
 
 @Composable
 internal fun AdbPage(
@@ -97,7 +96,7 @@ private fun validateConfig(viewModel: MainViewModel, context: Context): String? 
     if (viewModel.serverUrl.isBlank()) return "ADB WebSocket URL 不能为空。"
     if (!Settings.canDrawOverlays(context)) return "请先授予悬浮窗权限。"
     if (!isAccessibilityEnabled(context)) return "请先启用无障碍服务。"
-    if (Shizuku.checkSelfPermission() != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+    if (!isShizukuPermissionGranted()) {
         return "请先授予 Shizuku 权限。"
     }
     return null

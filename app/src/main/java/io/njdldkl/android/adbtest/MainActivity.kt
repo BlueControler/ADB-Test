@@ -146,11 +146,22 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestShizukuPermission() {
-        if (Shizuku.isPreV11()) {
+        val preV11 = runCatching { Shizuku.isPreV11() }.getOrElse {
+            viewModel.error = "Shizuku 服务未就绪。"
+            viewModel.refresh(this)
             return
         }
-        if (Shizuku.checkSelfPermission() != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            Shizuku.requestPermission(SHIZUKU_REQUEST_CODE)
+        if (preV11) {
+            viewModel.error = "Shizuku 版本过低。"
+            return
+        }
+        runCatching {
+            if (!isShizukuPermissionGranted()) {
+                Shizuku.requestPermission(SHIZUKU_REQUEST_CODE)
+            }
+        }.onFailure {
+            viewModel.error = "Shizuku 服务未就绪。"
+            viewModel.refresh(this)
         }
     }
 

@@ -35,12 +35,18 @@ class MainViewModel : ViewModel() {
     fun refresh(context: Context) {
         overlayGranted = Settings.canDrawOverlays(context)
         accessibilityEnabled = isAccessibilityEnabled(context)
-        shizukuGranted = Shizuku.checkSelfPermission() == android.content.pm.PackageManager.PERMISSION_GRANTED
+        shizukuGranted = isShizukuPermissionGranted()
         notificationGranted =
             Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
                     context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
                     android.content.pm.PackageManager.PERMISSION_GRANTED
     }
+}
+
+internal fun isShizukuPermissionGranted(): Boolean {
+    return runCatching {
+        Shizuku.checkSelfPermission() == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }.getOrDefault(false)
 }
 
 internal fun isAccessibilityEnabled(context: Context): Boolean {
